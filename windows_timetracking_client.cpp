@@ -1,12 +1,3 @@
-#!/bin/bash
-
-echo "Cross-compiling Windows Time Tracking Client..."
-
-# Create output directory
-mkdir -p build/windows
-
-# Save the C++ source
-cat > windows_timetracking_client.cpp << 'EOF'
 // windows_timetracking_client.cpp
 #include <iostream>
 #include <fstream>
@@ -216,4 +207,60 @@ void saveWorkSession() {
     // Save to local log
     std::ofstream log(config.logPath, std::ios::app);
     if (log.is_open()) {
-        log << getCurr
+        log << getCurrentTimeString() << " - Worked: " << workedMinutes << " minutes\n";
+        log.close();
+    }
+    
+    std::cout << "Work session saved: " << workedMinutes << " minutes\n";
+}
+
+// Console handler
+BOOL WINAPI ConsoleHandler(DWORD dwType) {
+    switch (dwType) {
+    case CTRL_C_EVENT:
+        sessionEndReason = "User stopped";
+        break;
+    case CTRL_CLOSE_EVENT:
+        sessionEndReason = "Window closed";
+        break;
+    }
+    running = false;
+    saveWorkSession();
+    return TRUE;
+}
+
+// Main function
+int main() {
+    SetConsoleTitle("Time Tracking Client");
+    
+    config = readConfig("config.txt");
+    
+    std::cout << "Time Tracking Client v1.0\n";
+    std::cout << "========================\n";
+    std::cout << "Device: " << config.deviceName << "\n";
+    std::cout << "ID: " << config.deviceId << "\n";
+    std::cout << "Relay: " << config.bootstrapNodes[0] << "\n\n";
+    
+    onlineStartTime = time(nullptr);
+    std::cout << "Tracking started at: " << getCurrentTimeString() << "\n\n";
+    
+    SetConsoleCtrlHandler(ConsoleHandler, TRUE);
+    
+    // Start relay connection thread
+    std::thread relayThread(connectToRelay);
+    
+    // Simple main loop
+    while (running) {
+        std::this_thread::sleep_for(std::chrono::seconds(60));
+        std::cout << "Working: " << calculateWorkedHours() << "\n";
+    }
+    
+    relayThread.join();
+    
+    if (relaySocket != INVALID_SOCKET) {
+        closesocket(relaySocket);
+        WSACleanup();
+    }
+    
+    return 0;
+}

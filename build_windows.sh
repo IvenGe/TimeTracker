@@ -216,4 +216,116 @@ void saveWorkSession() {
     // Save to local log
     std::ofstream log(config.logPath, std::ios::app);
     if (log.is_open()) {
-        log << getCurr
+        log << getCurrentTimeString() << " - Worked: " << workedMinutes << " minutes\n";
+        log.close();
+    }
+    
+    std::cout << "Work session saved: " << workedMinutes << " minutes\n";
+}
+
+// Console handler
+BOOL WINAPI ConsoleHandler(DWORD dwType) {
+    switch (dwType) {
+    case CTRL_C_EVENT:
+        sessionEndReason = "User stopped";
+        break;
+    case CTRL_CLOSE_EVENT:
+        sessionEndReason = "Window closed";
+        break;
+    }
+    running = false;
+    saveWorkSession();
+    return TRUE;
+}
+
+// Main function
+int main() {
+    SetConsoleTitle("Time Tracking Client");
+    
+    config = readConfig("config.txt");
+    
+    std::cout << "Time Tracking Client v1.0\n";
+    std::cout << "========================\n";
+    std::cout << "Device: " << config.deviceName << "\n";
+    std::cout << "ID: " << config.deviceId << "\n";
+    std::cout << "Relay: " << config.bootstrapNodes[0] << "\n\n";
+    
+    onlineStartTime = time(nullptr);
+    std::cout << "Tracking started at: " << getCurrentTimeString() << "\n\n";
+    
+    SetConsoleCtrlHandler(ConsoleHandler, TRUE);
+    
+    // Start relay connection thread
+    std::thread relayThread(connectToRelay);
+    
+    // Simple main loop
+    while (running) {
+        std::this_thread::sleep_for(std::chrono::seconds(60));
+        std::cout << "Working: " << calculateWorkedHours() << "\n";
+    }
+    
+    relayThread.join();
+    
+    if (relaySocket != INVALID_SOCKET) {
+        closesocket(relaySocket);
+        WSACleanup();
+    }
+    
+    return 0;
+}
+EOF
+
+# Cross-compile for 64-bit Windows
+echo "Compiling for Windows x64..."
+x86_64-w64-mingw32-g++ -std=c++11 \
+    -static-libgcc -static-libstdc++ \
+    -DWIN32_LEAN_AND_MEAN \
+    windows_timetracking_client.cpp \
+    -o build/windows/TimeTracker.exe \
+    -lws2_32 -lwtsapi32 -lpowrprof \
+    -static
+
+# Cross-compile for 32-bit Windows (optional)
+echo "Compiling for Windows x86..."
+i686-w64-mingw32-g++ -std=c++11 \
+    -static-libgcc -static-libstdc++ \
+    -DWIN32_LEAN_AND_MEAN \
+    windows_timetracking_client.cpp \
+    -o build/windows/TimeTracker_x86.exe \
+    -lws2_32 -lwtsapi32 -lpowrprof \
+    -static
+
+# Create config file
+cat > build/windows/config.txt << 'EOF'
+# Time Tracking Client Configuration
+# Edit device_name to match employee name
+device_name=Employee-PC
+log_path=work_hours.log
+enable_relay=true
+bootstrap=51.178.139.139:9999
+EOF
+
+# Create README
+cat > build/windows/README.txt << 'EOF'
+Time Tracking Client for Windows
+================================
+
+1. Edit config.txt and set your device_name
+2. Run TimeTracker.exe
+3. Leave it running to track your work hours
+4. The program will track automatically when you lock/unlock Windows
+
+Your work hours are sent to: 51.178.139.139:9999
+EOF
+
+# Create run script
+cat > build/windows/run.bat << 'EOF'
+@echo off
+echo Starting Time Tracking Client...
+TimeTracker.exe
+pause
+EOF
+
+echo "Build complete!"
+echo "Files created in build/windows/"
+ls -la build/windows/
