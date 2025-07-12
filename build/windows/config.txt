@@ -1,6 +1,0 @@
-# Time Tracking Client Configuration
-# Edit device_name to match employee name
-device_name=Employee-PC
-log_path=work_hours.log
-enable_relay=true
-bootstrap=51.178.139.139:9999
